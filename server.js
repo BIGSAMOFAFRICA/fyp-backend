@@ -33,12 +33,17 @@ const app = express();
 // ✅ Fixed CORS setup — no trailing slash!
 app.use(
   cors({
-    origin: process.env.CLIENT_URL || "http://localhost:5173",
-    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"], // ✅ Add PATCH here
+    origin: [
+      process.env.CLIENT_URL, // from .env
+      "https://fyp-frontend-yls3.onrender.com", // deployed frontend
+      "http://localhost:5173" // local frontend (Vite)
+    ],
+    methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     credentials: true,
     allowedHeaders: ["Content-Type", "Authorization"],
   })
 );
+
 
 
 // Middleware

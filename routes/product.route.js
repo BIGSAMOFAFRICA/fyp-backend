@@ -58,8 +58,10 @@ router.post("/", protectRoute, requireRole("seller"), createProduct);
 
 // Admin: Moderate products
 router.get("/pending", protectRoute, strictAdminOnly, getPendingProducts);
-router.post("/admin/products/:id/approve", protectRoute, strictAdminOnly, approveProduct);
-router.post("/admin/products/:id/reject", protectRoute, strictAdminOnly, rejectProduct);
+// Admin: Moderate products (PATCH matches frontend calls)
+router.patch("/:id/approve", protectRoute, strictAdminOnly, approveProduct);
+router.patch("/:id/reject", protectRoute, strictAdminOnly, rejectProduct);
+
 router.delete("/:id", protectRoute, strictAdminOnly, deleteProduct);
 router.patch("/:id", protectRoute, strictAdminOnly, toggleFeaturedProduct);
 // (Optional) Admin: Get all products
