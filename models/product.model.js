@@ -1,34 +1,33 @@
 import mongoose from "mongoose";
 
+
 const productSchema = new mongoose.Schema(
-  {
-    name: { type: String, required: true },
-    description: { type: String, required: true },
-    price: { type: Number, min: 0, required: true },
-    image: { type: String, required: [true, "Image is required"] },
-    category: { type: String, required: true },
-    isFeatured: { type: Boolean, default: false },
-    status: {
-      type: String,
-      enum: ["pending", "approved", "rejected"],
-      default: "pending",
-    },
-    sellerId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-    },
-    buyerId: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      default: null,
-    },
-  },
-  { timestamps: true }
+	{
+		name: { type: String, required: true },
+		description: { type: String, required: true },
+		price: { type: Number, min: 0, required: true },
+		image: { type: String, required: [true, "Image is required"] },
+		category: { type: String, required: true },
+		isFeatured: { type: Boolean, default: false },
+	       status: {
+		       type: String,
+		       enum: ["pending", "approved", "rejected"],
+		       default: "pending",
+	       },
+		sellerId: {
+			type: mongoose.Schema.Types.ObjectId,
+			ref: "User",
+			required: true,
+		},
+		buyerId: {
+			type: mongoose.Schema.Types.ObjectId,
+			ref: "User",
+			default: null,
+		},
+	},
+	{ timestamps: true }
 );
 
-// ✅ Fix: avoid OverwriteModelError by reusing existing model if loaded
-const Product =
-  mongoose.models.Product || mongoose.model("Product", productSchema);
+const Product = mongoose.model("Product", productSchema);
 
 export default Product;
