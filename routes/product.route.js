@@ -1,129 +1,122 @@
 import express from "express";
-import multer from "multer"; // ✅ import multer
-const router = express.Router();
-
-import {
-  createProduct,
-  deleteProduct,
-  getAllProducts,
-  getFeaturedProducts,
-  getProductsByCategory,
-  getRecommendedProducts,
-  toggleFeaturedProduct,
-  getPendingProducts,
-  approveProduct,
-  rejectProduct,
-  getApprovedProducts,
-  getSellerProductsByStatus
-} from "../controllers/product.controller.js";
-
+import multer from "multer";
+import mongoose from "mongoose";
+import axios from "axios";
+import FormData from "form-data";
 import { protectRoute, requireRole, strictAdminOnly } from "../middleware/auth.middleware.js";
-import Product from "../models/product.model.js";
-import Transaction from "../models/transaction.model.js";
 
-// =================== MULTER SETUP ===================
-const storage = multer.memoryStorage(); // store in memory for Cloudinary upload
-const upload = multer({ storage });
+const router = express.Router();
+const upload = multer({ storage: multer.memoryStorage() });
 
-// =================== ROUTES ===================
+// ----------------------
+// Product Schema
+// ----------------------
+const productSchema = new mongoose.Schema({
+  name: { type: String, required: true },
+  description: { type: String, required: true },
+  price: { type: Number, min: 0, required: true },
+  image: { type: String, required: true },
+  category: { type: String, required: true },
+  isFeatured: { type: Boolean, default: false },
+  status: { type: String, enum: ["pending", "approved", "rejected"], default: "pending" },
+  sellerId: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+  buyerId: { type: mongoose.Schema.Types.ObjectId, ref: "User", default: null },
+}, { timestamps: true });
 
-// Admin: Get all pending transactions (for dashboard)
-router.get("/transactions/pending", protectRoute, strictAdminOnly, async (req, res) => {
-  try {
-    const transactions = await Transaction.find({ status: "pending" })
-      .populate("productId", "name")
-      .populate("buyerId", "name");
-    res.json({ transactions });
-  } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
-  }
+const Product = mongoose.model("Product", productSchema);
+
+// ----------------------
+// Cloudinary Upload
+// ----------------------
+const CLOUDINARY_CLOUD_NAME = process.env.VITE_CLOUDINARY_CLOUD_NAME;
+const CLOUDINARY_UPLOAD_PRESET = process.env.VITE_CLOUDINARY_UPLOAD_PRESET;
+
+async function uploadToCloudinary(fileBuffer, folder = "products") {
+  const formData = new FormData();
+  formData.append("file", fileBuffer, { filename: "upload.jpg" });
+  formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+  formData.append("folder", folder);
+
+  const res = await axios.post(
+    `https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`,
+    formData,
+    { headers: formData.getHeaders() }
+  );
+
+  return res.data.secure_url;
+}
+
+// ----------------------
+// Controllers
+// ----------------------
+router.get("/", async (req, res) => {
+  const products = await Product.find({ status: "approved" });
+  res.json(products);
 });
 
-// Public: Get all approved products
-router.get("/", getApprovedProducts);
-router.get("/featured", getFeaturedProducts);
-router.get("/category/:category", getProductsByCategory);
-router.get("/recommendations", getRecommendedProducts);
-
-// Seller: Get own products grouped by status (counts)
-router.get("/seller/:sellerId/grouped", protectRoute, requireRole("seller"), async (req, res) => {
-  try {
-    const sellerId = req.params.sellerId;
-    const grouped = await Product.aggregate([
-      { $match: { sellerId: Product.schema.path('sellerId').instance === 'ObjectID' ? require('mongoose').Types.ObjectId(sellerId) : sellerId } },
-      { $group: { _id: "$status", count: { $sum: 1 } } }
-    ]);
-    const result = { pending: 0, approved: 0, rejected: 0 };
-    grouped.forEach(g => { result[g._id] = g.count; });
-    res.json(result);
-  } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
-  }
+router.get("/featured", async (req, res) => {
+  const products = await Product.find({ isFeatured: true, status: "approved" });
+  res.json(products);
 });
 
-// Seller: Submit product (defaults to pending) ✅ Multer added
-router.post(
-  "/",
-  protectRoute,
-  requireRole("seller"),
-  upload.single("image"), // must match frontend input name
-  createProduct
-);
-
-// Admin: Moderate products
-router.get("/pending", protectRoute, strictAdminOnly, getPendingProducts);
-router.patch("/:id/approve", protectRoute, strictAdminOnly, approveProduct);
-router.patch("/:id/reject", protectRoute, strictAdminOnly, rejectProduct);
-router.delete("/:id", protectRoute, strictAdminOnly, deleteProduct);
-router.patch("/:id", protectRoute, strictAdminOnly, toggleFeaturedProduct);
-router.get("/all", protectRoute, strictAdminOnly, getAllProducts);
-
-// Buyer: Purchase endpoint
-router.post("/buyer/purchase", protectRoute, async (req, res) => {
+// Seller uploads
+router.post("/", protectRoute, requireRole("seller"), upload.single("image"), async (req, res) => {
   try {
-    const { productId, amount } = req.body;
-    if (!productId || !amount) return res.status(400).json({ message: "productId and amount required" });
-    const product = await Product.findById(productId);
-    if (!product) return res.status(404).json({ message: "Product not found" });
-    const transaction = await Transaction.create({
-      productId,
-      sellerId: product.sellerId,
-      buyerId: req.user._id,
-      amount,
-      status: "pending"
+    const { name, description, price, category } = req.body;
+    if (!req.file) return res.status(400).json({ message: "Image is required" });
+
+    const imageUrl = await uploadToCloudinary(req.file.buffer);
+
+    const product = await Product.create({
+      name,
+      description,
+      price,
+      category,
+      image: imageUrl,
+      sellerId: req.user._id,
+      status: req.user.role === "admin" ? "approved" : "pending",
     });
-    res.status(201).json({ message: "Transaction created", transaction });
+
+    res.status(201).json(product);
   } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
+    res.status(500).json({ message: "Error creating product", error: err.message });
   }
 });
 
-// Admin: Approve transaction
-router.put("/admin/transactions/:id/approve", protectRoute, strictAdminOnly, async (req, res) => {
-  try {
-    const transaction = await Transaction.findById(req.params.id);
-    if (!transaction) return res.status(404).json({ message: "Transaction not found" });
-    if (transaction.status === "approved") return res.status(400).json({ message: "Transaction already approved" });
-    transaction.status = "approved";
-    await transaction.save();
-    res.json({ message: "Transaction approved and revenue updated", transaction });
-  } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
-  }
+// Admin approves product
+router.patch("/:id/approve", protectRoute, strictAdminOnly, async (req, res) => {
+  const product = await Product.findById(req.params.id);
+  if (!product) return res.status(404).json({ message: "Product not found" });
+  product.status = "approved";
+  await product.save();
+  res.json(product);
 });
 
-// Admin: Reject transaction
-router.put("/admin/transactions/:id/reject", protectRoute, strictAdminOnly, async (req, res) => {
-  try {
-    const transaction = await Transaction.findById(req.params.id);
-    if (!transaction) return res.status(404).json({ message: "Transaction not found" });
-    if (transaction.status === "rejected") return res.status(400).json({ message: "Transaction already rejected" });
-    transaction.status = "rejected";
-    await transaction.save();
-    res.json({ message: "Transaction rejected", transaction });
-  } catch (err) {
-    res.status(500).json({ message: "Server error", error: err.message });
-  }
+// Admin rejects product
+router.patch("/:id/reject", protectRoute, strictAdminOnly, async (req, res) => {
+  const product = await Product.findById(req.params.id);
+  if (!product) return res.status(404).json({ message: "Product not found" });
+  product.status = "rejected";
+  await product.save();
+  res.json(product);
+});
+
+// Toggle featured
+router.patch("/:id/featured", protectRoute, strictAdminOnly, async (req, res) => {
+  const product = await Product.findById(req.params.id);
+  if (!product) return res.status(404).json({ message: "Product not found" });
+  product.isFeatured = !product.isFeatured;
+  await product.save();
+  res.json(product);
+});
+
+// Seller: get own products grouped by status
+router.get("/seller/grouped", protectRoute, requireRole("seller"), async (req, res) => {
+  const sellerId = req.user._id;
+  const products = await Product.find({ sellerId });
+  const grouped = { pending: [], approved: [], rejected: [] };
+  products.forEach(p => { if (grouped[p.status]) grouped[p.status].push(p); });
+  res.json(grouped);
 });
 
 export default router;
