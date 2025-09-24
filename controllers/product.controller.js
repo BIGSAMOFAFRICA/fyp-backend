@@ -22,6 +22,18 @@ import Product from "../models/product.model.js";
 import Notification from "../models/notification.model.js";
 import User from "../models/user.model.js";
 
+// List products for the authenticated seller (flat list)
+export const getSellerProducts = async (req, res) => {
+    try {
+        if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+        const query = req.user.role === "admin" ? {} : { sellerId: req.user._id };
+        const products = await Product.find(query).sort({ createdAt: -1 });
+        res.json({ products });
+    } catch (error) {
+        res.status(500).json({ message: "Failed to fetch products", error: error.message });
+    }
+};
+
 export const getApprovedProducts = async (req, res) => {
 	try {
 		const products = await Product.find({ status: "approved" });
@@ -192,14 +204,17 @@ export const createProduct = async (req, res) => {
 
 export const deleteProduct = async (req, res) => {
 	try {
-		// Only admin can delete
-		if (!req.user || req.user.role !== "admin") {
-			return res.status(403).json({ message: "Forbidden: Admins only" });
-		}
-		const product = await Product.findById(req.params.id);
+        if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+        const product = await Product.findById(req.params.id);
 		if (!product) {
 			return res.status(404).json({ message: "Product not found" });
 		}
+        // Allow admins or the owning seller to delete
+        const isOwner = String(product.sellerId) === String(req.user._id);
+        const isAdmin = req.user.role === "admin";
+        if (!isAdmin && !isOwner) {
+            return res.status(403).json({ message: "Forbidden" });
+        }
 		if (product.image) {
 			const publicId = product.image.split("/").pop().split(".")[0];
 			try {
@@ -215,6 +230,49 @@ export const deleteProduct = async (req, res) => {
 		console.log("Error in deleteProduct controller", error.message);
 		res.status(500).json({ message: "Server error", error: error.message });
 	}
+};
+
+// Update a product (seller can update own product; sets status back to pending)
+export const updateProduct = async (req, res) => {
+    try {
+        if (!req.user) return res.status(401).json({ message: "Unauthorized" });
+        const product = await Product.findById(req.params.id);
+        if (!product) return res.status(404).json({ message: "Product not found" });
+
+        const isOwner = String(product.sellerId) === String(req.user._id);
+        const isAdmin = req.user.role === "admin";
+        if (!isAdmin && !isOwner) {
+            return res.status(403).json({ message: "Forbidden" });
+        }
+
+        const { name, description, price, image, category } = req.body;
+
+        if (typeof name === 'string') product.name = name;
+        if (typeof description === 'string') product.description = description;
+        if (typeof price !== 'undefined') product.price = price;
+        if (typeof category === 'string') product.category = category;
+
+        // If new image provided as data URL, upload and replace existing
+        if (image && typeof image === 'string' && image.startsWith('data:')) {
+            try {
+                const uploadRes = await cloudinary.uploader.upload(image, { folder: 'products' });
+                product.image = uploadRes?.secure_url || product.image;
+            } catch (err) {
+                return res.status(400).json({ message: 'Image upload failed', error: err.message });
+            }
+        }
+
+        // If seller updates, set status back to pending for re-approval
+        if (!isAdmin) {
+            product.status = 'pending';
+        }
+
+        await product.save();
+        res.json(product);
+    } catch (error) {
+        console.log('Error in updateProduct controller', error.message);
+        res.status(500).json({ message: 'Server error', error: error.message });
+    }
 };
 
 export const getRecommendedProducts = async (req, res) => {

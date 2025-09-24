@@ -2,18 +2,20 @@
 import express from "express";
 const router = express.Router();
 import {
-	createProduct,
-	deleteProduct,
-	getAllProducts,
-	getFeaturedProducts,
-	getProductsByCategory,
-	getRecommendedProducts,
-	toggleFeaturedProduct,
-	getPendingProducts,
-	approveProduct,
-	rejectProduct,
-	getApprovedProducts,
-	getSellerProductsByStatus
+    createProduct,
+    deleteProduct,
+    getAllProducts,
+    getFeaturedProducts,
+    getProductsByCategory,
+    getRecommendedProducts,
+    toggleFeaturedProduct,
+    getPendingProducts,
+    approveProduct,
+    rejectProduct,
+    getApprovedProducts,
+    getSellerProductsByStatus,
+    getSellerProducts,
+    updateProduct
 } from "../controllers/product.controller.js";
 import { protectRoute, requireRole, strictAdminOnly } from "../middleware/auth.middleware.js";
 import Product from "../models/product.model.js";
@@ -53,6 +55,9 @@ router.get("/seller/:sellerId/grouped", protectRoute, requireRole("seller"), asy
 	}
 });
 
+// Seller/Admin: List products (seller sees own; admin sees all)
+router.get("/mine", protectRoute, getSellerProducts);
+
 // Seller: Submit product (defaults to pending)
 router.post("/", protectRoute, requireRole("seller"), createProduct);
 
@@ -62,8 +67,11 @@ router.get("/pending", protectRoute, strictAdminOnly, getPendingProducts);
 router.patch("/:id/approve", protectRoute, strictAdminOnly, approveProduct);
 router.patch("/:id/reject", protectRoute, strictAdminOnly, rejectProduct);
 
-router.delete("/:id", protectRoute, strictAdminOnly, deleteProduct);
+router.delete("/:id", protectRoute, deleteProduct);
 router.patch("/:id", protectRoute, strictAdminOnly, toggleFeaturedProduct);
+
+// Seller/Admin: Update a product
+router.put("/:id", protectRoute, updateProduct);
 // (Optional) Admin: Get all products
 router.get("/all", protectRoute, strictAdminOnly, getAllProducts);
 

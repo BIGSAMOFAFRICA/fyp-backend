@@ -49,12 +49,15 @@ export const getSellerDashboard = async (req, res) => {
     const approvedProducts = products.filter(p => p.status === "approved");
     const rejectedProducts = products.filter(p => p.status === "rejected");
 
+    // Get all transactions for this seller (for orders page)
+    const allTransactions = await Transaction.find({ sellerId }).populate("buyerId", "name email").populate("productId", "name");
+    
     // Revenue: sum of all approved transactions for this seller
-    const approvedTransactions = await Transaction.find({ sellerId, status: "approved" }).populate("buyerId", "name email").populate("productId", "name");
+    const approvedTransactions = allTransactions.filter(t => t.status === "approved");
     const totalRevenue = approvedTransactions.reduce((sum, t) => sum + (t.amount || 0), 0);
 
-    // Recent transactions (last 5)
-    const recentTransactions = approvedTransactions.slice(-5).map(t => ({
+    // Recent transactions (last 10, all statuses)
+    const recentTransactions = allTransactions.slice(-10).map(t => ({
       _id: t._id,
       amount: t.amount,
       buyer: t.buyerId,

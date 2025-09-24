@@ -1,6 +1,7 @@
 import cloudinaryConfigRoute from "./routes/cloudinary.route.js";
 import dotenv from "dotenv";
-dotenv.config(); // 👈 Immediately after importing dotenv
+// Load environment variables
+dotenv.config();
 
 import express from "express";
 import cookieParser from "cookie-parser";
@@ -23,20 +24,17 @@ import escrowRoutes from "./routes/escrow.route.js";
 import { connectDB } from "./lib/db.js";
 import { redis } from "./lib/redis.js";
 
-dotenv.config();
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
 
-// ✅ Fixed CORS setup — no trailing slash!
 app.use(
   cors({
     origin: [
-      process.env.CLIENT_URL, // from .env
-      "https://fyp-frontend-yls3.onrender.com", // deployed frontend
-      "http://localhost:5173" // local frontend (Vite)
+      process.env.CLIENT_URL,
+      "https://fyp-frontend-yls3.onrender.com",
+      "http://localhost:5173"
     ],
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     credentials: true,
@@ -50,7 +48,7 @@ app.use(
 app.use(express.json({ limit: "10mb" }));
 app.use(cookieParser());
 
-// API Routes
+// API routes
 app.use("/api/config", cloudinaryConfigRoute);
 app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
