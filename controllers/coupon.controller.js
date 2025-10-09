@@ -1,7 +1,7 @@
 export const getCoupon = (req, res) => {
   res.status(200).json({
     code: "BIGSAMOFAFRICA",
-    discount: 30, // 30% discount
+    discount: 30, 
   });
 };
 

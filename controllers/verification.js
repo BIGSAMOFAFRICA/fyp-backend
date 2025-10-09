@@ -1,10 +1,10 @@
-// File: backend/controllers/verification.js
-// Instructions: Create this new file in the `backend/controllers/` directory.
+
+
 
 import User from "../models/user.model.js";
 import { generateVerificationCode, sendVerificationEmail } from "../lib/email.js";
 
-// Generate and send OTP to user's email
+
 export const sendOTP = async (req, res) => {
   try {
     const { email } = req.body;
@@ -12,7 +12,7 @@ export const sendOTP = async (req, res) => {
       return res.status(400).json({ message: "Email is required" });
     }
 
-    // Find user by email
+    
     const user = await User.findOne({ email });
     if (!user) {
       return res.status(404).json({ message: "User not found" });
@@ -21,16 +21,16 @@ export const sendOTP = async (req, res) => {
       return res.status(400).json({ message: "Email is already verified" });
     }
 
-    // Generate new OTP and expiration
+    
     const verificationCode = generateVerificationCode();
-    const verificationCodeExpires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
+    const verificationCodeExpires = new Date(Date.now() + 10 * 60 * 1000); 
 
-    // Update user with new OTP
+    
     user.verificationCode = verificationCode;
     user.verificationCodeExpires = verificationCodeExpires;
     await user.save();
 
-    // Send verification email
+    
     const emailResult = await sendVerificationEmail(email, verificationCode);
     if (!emailResult.success) {
       console.error("Failed to send verification email:", emailResult.error);
@@ -44,7 +44,7 @@ export const sendOTP = async (req, res) => {
   }
 };
 
-// Verify OTP submitted by user
+
 export const verifyOTP = async (req, res) => {
   try {
     const { email, code } = req.body;
@@ -52,18 +52,18 @@ export const verifyOTP = async (req, res) => {
       return res.status(400).json({ message: "Email and OTP are required" });
     }
 
-    // Find user by email and OTP
+    
     const user = await User.findOne({
       email,
       verificationCode: code,
-      verificationCodeExpires: { $gt: new Date() }, // Ensure OTP is not expired
+      verificationCodeExpires: { $gt: new Date() }, 
     });
 
     if (!user) {
       return res.status(400).json({ message: "Invalid or expired OTP" });
     }
 
-    // Mark user as verified
+    
     user.isVerified = true;
     user.verificationCode = undefined;
     user.verificationCodeExpires = undefined;

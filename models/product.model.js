@@ -11,7 +11,7 @@ const productSchema = new mongoose.Schema(
 		isFeatured: { type: Boolean, default: false },
 	       status: {
 		       type: String,
-		       enum: ["pending", "approved", "rejected"],
+		       enum: ["pending", "approved", "rejected", "active", "sold"],
 		       default: "pending",
 	       },
 		sellerId: {
@@ -27,6 +27,13 @@ const productSchema = new mongoose.Schema(
 	},
 	{ timestamps: true }
 );
+
+
+productSchema.index({ sellerId: 1 });
+productSchema.index({ status: 1 });
+productSchema.index({ category: 1, status: 1 });
+productSchema.index({ isFeatured: 1, status: 1 });
+productSchema.index({ status: 1, createdAt: -1 });
 
 const Product = mongoose.model("Product", productSchema);
 

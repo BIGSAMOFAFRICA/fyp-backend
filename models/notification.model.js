@@ -9,7 +9,7 @@ const notificationSchema = new mongoose.Schema(
     },
     type: {
       type: String,
-      enum: ["product_approved", "product_rejected", "order_placed", "admin_message"],
+      enum: ["product_approved", "product_rejected", "order_placed", "order_confirmed", "order_completed", "admin_message"],
       required: true,
     },
     message: {
@@ -27,6 +27,10 @@ const notificationSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+
+notificationSchema.index({ user: 1, createdAt: -1 });
+notificationSchema.index({ read: 1, createdAt: -1 });
 
 const Notification = mongoose.model("Notification", notificationSchema);
 

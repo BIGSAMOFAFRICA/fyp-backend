@@ -1,15 +1,13 @@
-// Checks if user is admin by role
 export const isAdmin = (req, res, next) => {
   if (req.user && req.user.role === "admin") {
     return next();
   }
   return res.status(403).json({ message: "Access denied - Admin only" });
 };
-// File: backend/middleware/auth.middleware.js
-// Instructions: Replace the existing `auth.middleware.js` in `backend/middleware/` with this content.
-
 import jwt from "jsonwebtoken";
 import User from "../models/user.model.js";
+
+import { redis } from "../lib/redis.js";
 
 export const protectRoute = async (req, res, next) => {
   let token = null;
@@ -21,16 +19,59 @@ export const protectRoute = async (req, res, next) => {
   if (!token) {
     return res.status(401).json({ message: "Unauthorized - No access token provided" });
   }
+  
   try {
     let decoded;
+    let user;
+    
     try {
       decoded = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
     } catch (jwtError) {
-      console.error("JWT verification failed in auth middleware:", jwtError.message);
-      return res.status(401).json({ message: "Unauthorized - Invalid access token" });
+      console.error("JWT verification failed:", jwtError.message);
+      
+      if (jwtError.name === 'TokenExpiredError') {
+        try {
+          const refreshToken = req.cookies.refreshToken;
+          if (!refreshToken) {
+            return res.status(401).json({ message: "Access token expired and no refresh token provided" });
+          }
+          
+          const refreshDecoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
+          
+          let storedToken;
+          try {
+            storedToken = await redis.get(`refresh_token:${refreshDecoded.userId}`);
+          } catch (redisError) {
+            console.error("Redis error when fetching refresh token in middleware:", redisError.message);
+            // Continue with token validation even if Redis fails
+          }
+          
+          if (storedToken && storedToken !== refreshToken) {
+            return res.status(401).json({ message: "Invalid refresh token" });
+          }
+          
+          const newAccessToken = jwt.sign({ userId: refreshDecoded.userId }, process.env.ACCESS_TOKEN_SECRET, {
+            expiresIn: "15m",
+          });
+          
+          res.cookie("accessToken", newAccessToken, {
+            httpOnly: true,
+            secure: process.env.NODE_ENV === "production",
+            sameSite: "strict",
+            maxAge: 15 * 60 * 1000,
+          });
+          
+          decoded = jwt.verify(newAccessToken, process.env.ACCESS_TOKEN_SECRET);
+          
+        } catch (refreshError) {
+          console.error("Token refresh failed:", refreshError.message);
+          return res.status(401).json({ message: "Token expired and refresh failed" });
+        }
+      } else {
+        return res.status(401).json({ message: "Unauthorized - Invalid access token" });
+      }
     }
 
-    let user;
     try {
       user = await User.findById(decoded.userId).select("-password");
       if (!user) {

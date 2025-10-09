@@ -48,6 +48,18 @@ const userSchema = new mongoose.Schema(
 			type: Number,
 			default: 0,
 		},
+		totalEarnings: {
+			type: Number,
+			default: 0,
+		},
+		pendingEarnings: {
+			type: Number,
+			default: 0,
+		},
+		adminRevenue: {
+			type: Number,
+			default: 0,
+		},
 		virtualAccountNumber: {
 			type: String,
 			unique: true,

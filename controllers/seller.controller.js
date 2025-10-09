@@ -1,6 +1,7 @@
-// Create a new product for seller
+
 import Product from "../models/product.model.js";
-// Reuse admin product creation logic, but set status to 'pending' and assign sellerId
+import EscrowTransaction from "../models/escrowTransaction.model.js";
+
 export const createSellerProduct = async (req, res) => {
   try {
     if (!req.user || !req.user._id) {
@@ -12,7 +13,7 @@ export const createSellerProduct = async (req, res) => {
     if (!name || !description || !price || !image || !category) {
       return res.status(400).json({ message: "All product fields are required" });
     }
-    // Optionally handle image upload here if needed (cloudinary, etc.)
+    
     const productData = {
       name,
       description,
@@ -29,37 +30,38 @@ export const createSellerProduct = async (req, res) => {
     res.status(500).json({ message: "Server error", error: err.message });
   }
 };
-// (duplicate import removed)
+
 import User from "../models/user.model.js";
 
-// Get seller dashboard analytics and product lists
 
-// Enhanced: Seller dashboard shows products by status and revenue (from approved transactions)
-import Transaction from "../models/transaction.model.js";
+
+
+
 export const getSellerDashboard = async (req, res) => {
   try {
     const sellerId = req.user._id;
     const seller = await User.findById(sellerId).select("name email");
     if (!seller) return res.status(404).json({ message: "Seller not found" });
 
-    // Get all products by this seller
+    
     const products = await Product.find({ sellerId });
-    // Group by status
+    
     const pendingProducts = products.filter(p => p.status === "pending");
     const approvedProducts = products.filter(p => p.status === "approved");
     const rejectedProducts = products.filter(p => p.status === "rejected");
 
-    // Get all transactions for this seller (for orders page)
-    const allTransactions = await Transaction.find({ sellerId }).populate("buyerId", "name email").populate("productId", "name");
     
-    // Revenue: sum of all approved transactions for this seller
-    const approvedTransactions = allTransactions.filter(t => t.status === "approved");
-    const totalRevenue = approvedTransactions.reduce((sum, t) => sum + (t.amount || 0), 0);
+    const allTransactions = await EscrowTransaction.find({ sellerId }).populate("buyerId", "name email").populate("productId", "name");
+    
+    
+    const releasedTransactions = allTransactions.filter(t => t.status === "released");
+    const totalRevenue = releasedTransactions.reduce((sum, t) => sum + (t.sellerShare || 0), 0);
 
-    // Recent transactions (last 10, all statuses)
+    
     const recentTransactions = allTransactions.slice(-10).map(t => ({
       _id: t._id,
-      amount: t.amount,
+      amount: t.totalAmount,
+      sellerShare: t.sellerShare,
       buyer: t.buyerId,
       product: t.productId,
       status: t.status,
@@ -85,7 +87,7 @@ export const getSellerDashboard = async (req, res) => {
   }
 };
 
-// Delete a product (only by owner)
+
 export const deleteSellerProduct = async (req, res) => {
   try {
     const sellerId = req.user._id;

@@ -19,15 +19,38 @@ const transactionSchema = new mongoose.Schema(
       ref: "Product",
       required: true,
     },
-    amount: {
+    totalAmount: {
       type: Number,
       required: true,
       min: 0,
     },
-    status: {
+    adminShare: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    sellerShare: {
+      type: Number,
+      required: true,
+      min: 0,
+    },
+    orderStatus: {
       type: String,
-      enum: ["pending", "approved", "rejected"],
+      enum: ["pending", "completed", "delivered", "cancelled"],
       default: "pending",
+    },
+    escrowStatus: {
+      type: String,
+      enum: ["holding", "released", "refunded"],
+      default: "holding",
+    },
+    releasedAt: {
+      type: Date,
+      default: null,
+    },
+    completedAt: {
+      type: Date,
+      default: null,
     },
   },
   { timestamps: true }

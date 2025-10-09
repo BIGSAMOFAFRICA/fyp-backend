@@ -1,6 +1,3 @@
-// File: backend/controllers/auth.controller.js
-// Instructions: Replace the existing `auth.controller.js` in `backend/controllers/` with this content.
-
 import { redis } from "../lib/redis.js";
 import User from "../models/user.model.js";
 import jwt from "jsonwebtoken";
@@ -23,15 +20,11 @@ const generateTokens = (userId) => {
 
 const storeRefreshToken = async (userId, refreshToken) => {
   try {
-    const setPromise = redis.set(`refresh_token:${userId}`, refreshToken, "EX", 7 * 24 * 60 * 60);
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error("Redis operation timed out")), 1000)
-    );
-    await Promise.race([setPromise, timeoutPromise]);
+    await redis.set(`refresh_token:${userId}`, refreshToken, { ex: 7 * 24 * 60 * 60, nx: true });
     console.log(`✅ Successfully stored refresh token for user ${userId}`);
   } catch (error) {
     console.error("Failed to store refresh token in Redis:", error.message);
-    console.log("⚠️ Continuing without storing refresh token in Redis");
+    // Don't throw error to prevent blocking user operations
   }
 };
 
@@ -62,7 +55,6 @@ export const signup = async (req, res) => {
     if (role === "seller") userRole = "seller";
 
 
-    // Normal user flow
     const verificationCode = generateVerificationCode();
     const verificationCodeExpires = new Date(Date.now() + 10 * 60 * 1000);
 
@@ -107,7 +99,6 @@ export const login = async (req, res) => {
 
     if (user && (await user.comparePassword(password))) {
 
-      // Normal user: block if not verified
       if (!user.isVerified) {
         if (!user.verificationCodeExpires || user.verificationCodeExpires < new Date()) {
           const verificationCode = generateVerificationCode();
@@ -152,14 +143,11 @@ export const logout = async (req, res) => {
     if (refreshToken) {
       try {
         const decoded = jwt.verify(refreshToken, process.env.REFRESH_TOKEN_SECRET);
-        const deletePromise = redis.del(`refresh_token:${decoded.userId}`);
-        const timeoutPromise = new Promise((_, reject) =>
-          setTimeout(() => reject(new Error("Redis operation timed out")), 1000)
-        );
-        await Promise.race([deletePromise, timeoutPromise]);
+        await redis.del(`refresh_token:${decoded.userId}`);
         console.log(`✅ Successfully deleted refresh token for user ${decoded.userId}`);
       } catch (redisError) {
         console.error("Failed to delete refresh token from Redis:", redisError.message);
+        // Don't throw error to prevent blocking logout
       }
     }
 
@@ -191,14 +179,10 @@ export const refreshToken = async (req, res) => {
 
     let storedToken;
     try {
-      const getPromise = redis.get(`refresh_token:${decoded.userId}`);
-      const timeoutPromise = new Promise((_, reject) =>
-        setTimeout(() => reject(new Error("Redis operation timed out")), 1000)
-      );
-      storedToken = await Promise.race([getPromise, timeoutPromise]);
+      storedToken = await redis.get(`refresh_token:${decoded.userId}`);
     } catch (redisError) {
       console.error("Redis error when fetching refresh token:", redisError.message);
-      console.log("Proceeding with token refresh despite Redis error");
+      // Continue with token refresh even if Redis fails
     }
 
     if (storedToken && storedToken !== refreshToken) {
@@ -234,7 +218,6 @@ export const getProfile = async (req, res) => {
     res.status(500).json({ message: "Server error" });
   }
 };
-// Verify OTP validity (for password reset)
 export const verifyPasswordResetOTP = async (req, res) => {
   const { email, otp } = req.body;
   const user = await User.findOne({
@@ -248,7 +231,6 @@ export const verifyPasswordResetOTP = async (req, res) => {
   res.json({ valid: true, message: "OTP is valid." });
 };
 
-// Request password reset (OTP version)
 export const requestPasswordReset = async (req, res) => {
   const { email } = req.body;
   const user = await User.findOne({ email });
@@ -256,7 +238,7 @@ export const requestPasswordReset = async (req, res) => {
 
   const otp = generateVerificationCode();
   user.resetPasswordOTP = otp;
-  user.resetPasswordOTPExpires = Date.now() + 10 * 60 * 1000; // 10 minutes
+  user.resetPasswordOTPExpires = Date.now() + 10 * 60 * 1000; 
   await user.save();
 
   await sendPasswordResetOTPEmail(email, otp);
@@ -264,7 +246,6 @@ export const requestPasswordReset = async (req, res) => {
   res.json({ message: "If that email exists, an OTP was sent." });
 };
 
-// Reset password with OTP
 export const resetPassword = async (req, res) => {
   try {
     const { email, otp, password } = req.body;
@@ -276,8 +257,8 @@ export const resetPassword = async (req, res) => {
     if (!user) {
       return res.status(400).json({ message: "Invalid or expired OTP." });
     }
-  user.password = password; // Let pre-save hook hash it
-  user.isVerified = true; // Mark user as verified after password reset
+  user.password = password;
+  user.isVerified = true;
     user.resetPasswordOTP = undefined;
     user.resetPasswordOTPExpires = undefined;
     await user.save();

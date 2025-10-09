@@ -1,41 +1,63 @@
 import Order from "../models/order.model.js";
 import Product from "../models/product.model.js";
 import User from "../models/user.model.js";
+import EscrowTransaction from "../models/escrowTransaction.model.js";
 
 export const getAnalyticsData = async () => {
-	// Always fetch real-time stats from MongoDB
+	
 	const totalUsers = await User.countDocuments({});
 	const totalProducts = await Product.countDocuments({});
-	const salesData = await Order.aggregate([
-		{
-			$match: { status: { $in: ["completed", "released", "paid", "fulfilled"] } },
-		},
-		{
-			$group: {
-				_id: null,
-				totalSales: { $sum: 1 },
-				totalRevenue: { $sum: "$totalAmount" },
-			},
-		},
-	]);
-	const { totalSales, totalRevenue } = salesData[0] || { totalSales: 0, totalRevenue: 0 };
+	
+	// Get all escrow transactions (pending, completed, released)
+	const allEscrowTransactions = await EscrowTransaction.find({});
+	const totalSales = allEscrowTransactions.length;
+	const totalRevenue = allEscrowTransactions.reduce((sum, tx) => sum + tx.totalAmount, 0);
+	
+	// Get pending transactions
+	const pendingTransactions = await EscrowTransaction.find({ 
+		status: "pending",
+		isConfirmed: false 
+	});
+	
+	// Get completed transactions
+	const completedTransactions = await EscrowTransaction.find({ 
+		status: "completed",
+		isConfirmed: true 
+	});
+	
+	// Get released transactions
+	const releasedTransactions = await EscrowTransaction.find({ 
+		status: "released" 
+	});
+	
+	// Calculate admin revenue
+	const totalAdminRevenue = releasedTransactions.reduce((sum, tx) => sum + tx.adminShare, 0);
+	const pendingAdminRevenue = pendingTransactions.reduce((sum, tx) => sum + tx.adminShare, 0);
+	
 	return {
 		users: totalUsers,
 		products: totalProducts,
 		totalSales,
 		totalRevenue,
+		pendingTransactions: pendingTransactions.length,
+		completedTransactions: completedTransactions.length,
+		releasedTransactions: releasedTransactions.length,
+		totalAdminRevenue,
+		pendingAdminRevenue
 	};
 };
 
 export const getDailySalesData = async (startDate, endDate) => {
 	try {
-		const dailySalesData = await Order.aggregate([
+		
+		// Get all escrow transactions in the date range
+		const dailySalesData = await EscrowTransaction.aggregate([
 			{
 				$match: {
 					createdAt: {
 						$gte: startDate,
 						$lte: endDate,
-					},
+					}
 				},
 			},
 			{
@@ -43,30 +65,33 @@ export const getDailySalesData = async (startDate, endDate) => {
 					_id: { $dateToString: { format: "%Y-%m-%d", date: "$createdAt" } },
 					sales: { $sum: 1 },
 					revenue: { $sum: "$totalAmount" },
+					adminRevenue: { $sum: "$adminShare" },
+					sellerRevenue: { $sum: "$sellerShare" }
 				},
 			},
 			{ $sort: { _id: 1 } },
 		]);
 
-		// example of dailySalesData
-		// [
-		// 	{
-		// 		_id: "2024-08-18",
-		// 		sales: 12,
-		// 		revenue: 1450.75
-		// 	},
-		// ]
+		
+		
+		
+		
+		
+		
+		
+		
 
 		const dateArray = getDatesInRange(startDate, endDate);
-		// console.log(dateArray) // ['2024-08-18', '2024-08-19', ... ]
-
+		
 		return dateArray.map((date) => {
 			const foundData = dailySalesData.find((item) => item._id === date);
 
 			return {
-				date,
+				name: date,
 				sales: foundData?.sales || 0,
 				revenue: foundData?.revenue || 0,
+				adminRevenue: foundData?.adminRevenue || 0,
+				sellerRevenue: foundData?.sellerRevenue || 0,
 			};
 		});
 	} catch (error) {

@@ -1,6 +1,6 @@
 import Notification from "../models/notification.model.js";
 
-// Get notifications for a user
+
 export const getUserNotifications = async (req, res) => {
   try {
     const notifications = await Notification.find({ user: req.user._id }).sort({ createdAt: -1 });
@@ -10,7 +10,7 @@ export const getUserNotifications = async (req, res) => {
   }
 };
 
-// Mark notification as read
+
 export const markNotificationRead = async (req, res) => {
   try {
     const notification = await Notification.findById(req.params.id);
@@ -24,7 +24,7 @@ export const markNotificationRead = async (req, res) => {
   }
 };
 
-// Admin: send notification to a user (e.g., on product approval/rejection)
+
 export const sendNotification = async (req, res) => {
   try {
     const { userId, type, message, meta } = req.body;

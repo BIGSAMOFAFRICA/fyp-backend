@@ -1,5 +1,5 @@
-// File: backend/routes/auth.route.js
-// Instructions: Replace the existing `auth.route.js` in `backend/routes/` with this content.
+
+
 
 import express from "express";
 import { login, logout, signup, refreshToken, getProfile, requestPasswordReset, resetPassword, verifyPasswordResetOTP } from "../controllers/auth.controller.js";

@@ -1,4 +1,4 @@
-// Fetch products for a seller grouped by status
+
 export const getSellerProductsByStatus = async (req, res) => {
 	try {
 		const sellerId = req.user._id;
@@ -22,7 +22,7 @@ import Product from "../models/product.model.js";
 import Notification from "../models/notification.model.js";
 import User from "../models/user.model.js";
 
-// List products for the authenticated seller (flat list)
+
 export const getSellerProducts = async (req, res) => {
     try {
         if (!req.user) return res.status(401).json({ message: "Unauthorized" });
@@ -56,7 +56,7 @@ export const getPendingProducts = async (req, res) => {
 
 export const approveProduct = async (req, res) => {
 	try {
-		// Only admin can approve
+		
 		if (!req.user || req.user.role !== "admin") {
 			return res.status(403).json({ message: "Forbidden: Admins only" });
 		}
@@ -64,7 +64,7 @@ export const approveProduct = async (req, res) => {
 		if (!product) return res.status(404).json({ message: "Product not found" });
 		product.status = "approved";
 		await product.save();
-		// Notify seller if exists
+		
 		if (product.seller) {
 			const seller = await User.findById(product.seller);
 			if (seller) {
@@ -85,7 +85,7 @@ export const approveProduct = async (req, res) => {
 
 export const rejectProduct = async (req, res) => {
 	try {
-		// Only admin can reject
+		
 		if (!req.user || req.user.role !== "admin") {
 			return res.status(403).json({ message: "Forbidden: Admins only" });
 		}
@@ -93,7 +93,7 @@ export const rejectProduct = async (req, res) => {
 		if (!product) return res.status(404).json({ message: "Product not found" });
 		product.status = "rejected";
 		await product.save();
-		// Notify seller if exists
+		
 		if (product.seller) {
 			const seller = await User.findById(product.seller);
 			if (seller) {
@@ -114,7 +114,7 @@ export const rejectProduct = async (req, res) => {
 
 export const getAllProducts = async (req, res) => {
 	try {
-		const products = await Product.find({}); // find all products
+		const products = await Product.find({}); 
 		res.json({ products });
 	} catch (error) {
 		console.log("Error in getAllProducts controller", error.message);
@@ -124,7 +124,7 @@ export const getAllProducts = async (req, res) => {
 
 export const getFeaturedProducts = async (req, res) => {
 	try {
-		// Try to get from Redis cache first
+		
 		let featuredProducts;
 		try {
 			featuredProducts = await redis.get("featured_products");
@@ -133,21 +133,21 @@ export const getFeaturedProducts = async (req, res) => {
 			}
 		} catch (redisError) {
 			console.log("Redis error in getFeaturedProducts, falling back to database", redisError.message);
-			// Continue to database query if Redis fails
+			
 		}
 
-		// Get from database
+		
 		featuredProducts = await Product.find({ isFeatured: true, status: "approved" }).lean();
 		if (!featuredProducts || featuredProducts.length === 0) {
 			return res.status(404).json({ message: "No featured products found" });
 		}
 
-		// Try to cache in Redis, but don't fail if Redis is unavailable
+		
 		try {
 			await redis.set("featured_products", JSON.stringify(featuredProducts));
 		} catch (redisError) {
 			console.log("Failed to cache featured products in Redis", redisError.message);
-			// Continue without caching
+			
 		}
 
 		res.json(featuredProducts);
@@ -162,7 +162,7 @@ export const createProduct = async (req, res) => {
 		   const { name, description, price, image, category } = req.body;
 
 
-		   // Validate required fields
+		   
 		   if (!req.user || !req.user._id) {
 			   return res.status(401).json({ message: "Unauthorized: Seller not found" });
 		   }
@@ -209,7 +209,7 @@ export const deleteProduct = async (req, res) => {
 		if (!product) {
 			return res.status(404).json({ message: "Product not found" });
 		}
-        // Allow admins or the owning seller to delete
+        
         const isOwner = String(product.sellerId) === String(req.user._id);
         const isAdmin = req.user.role === "admin";
         if (!isAdmin && !isOwner) {
@@ -232,7 +232,7 @@ export const deleteProduct = async (req, res) => {
 	}
 };
 
-// Update a product (seller can update own product; sets status back to pending)
+
 export const updateProduct = async (req, res) => {
     try {
         if (!req.user) return res.status(401).json({ message: "Unauthorized" });
@@ -252,7 +252,7 @@ export const updateProduct = async (req, res) => {
         if (typeof price !== 'undefined') product.price = price;
         if (typeof category === 'string') product.category = category;
 
-        // If new image provided as data URL, upload and replace existing
+        
         if (image && typeof image === 'string' && image.startsWith('data:')) {
             try {
                 const uploadRes = await cloudinary.uploader.upload(image, { folder: 'products' });
@@ -262,7 +262,7 @@ export const updateProduct = async (req, res) => {
             }
         }
 
-        // If seller updates, set status back to pending for re-approval
+        
         if (!isAdmin) {
             product.status = 'pending';
         }
