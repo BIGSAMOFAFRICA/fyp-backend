@@ -40,6 +40,8 @@ const userSchema = new mongoose.Schema(
 			type: Boolean,
 			default: false,
 		},
+
+		// Removed OTP verification fields - signup no longer requires OTP
 		walletBalance: {
 			type: Number,
 			default: 0,
@@ -65,16 +67,11 @@ const userSchema = new mongoose.Schema(
 			unique: true,
 			sparse: true,
 		},
-		verificationCode: {
+		// Password reset token (secure token for reset links)
+		resetPasswordToken: {
 			type: String,
 		},
-		verificationCodeExpires: {
-			type: Date,
-		},
-		resetPasswordOTP: {
-			type: String,
-		},
-		resetPasswordOTPExpires: {
+		resetPasswordExpires: {
 			type: Date,
 		},
 	},

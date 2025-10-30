@@ -1,10 +1,9 @@
 import { redis } from "../lib/redis.js";
 import User from "../models/user.model.js";
 import jwt from "jsonwebtoken";
-import { generateVerificationCode, sendVerificationEmail } from "../lib/email.js";
+import { generateVerificationCode, sendPasswordResetEmail, sendPasswordResetOTPEmail } from "../lib/email.js";
 import crypto from "crypto";
 import bcrypt from "bcryptjs";
-import { sendPasswordResetEmail, sendPasswordResetOTPEmail } from "../lib/email.js";
 
 const generateTokens = (userId) => {
   const accessToken = jwt.sign({ userId }, process.env.ACCESS_TOKEN_SECRET, {
@@ -53,25 +52,14 @@ export const signup = async (req, res) => {
 
     let userRole = "buyer";
     if (role === "seller") userRole = "seller";
-
-
-    const verificationCode = generateVerificationCode();
-    const verificationCodeExpires = new Date(Date.now() + 10 * 60 * 1000);
-
+    // Create the user as verified immediately — OTP verification for signup removed
     const user = await User.create({
       name,
       email,
       password,
       role: userRole,
-      verificationCode,
-      verificationCodeExpires,
-      isVerified: false,
+      isVerified: true,
     });
-
-    const emailResult = await sendVerificationEmail(email, verificationCode);
-    if (!emailResult.success) {
-      console.error("Failed to send verification email:", emailResult.error);
-    }
 
     const { accessToken, refreshToken } = generateTokens(user._id);
     await storeRefreshToken(user._id, refreshToken);
@@ -84,7 +72,7 @@ export const signup = async (req, res) => {
       role: user.role,
       isVerified: user.isVerified,
       accessToken,
-      message: "Please check your email for OTP",
+      message: "Signup successful",
     });
   } catch (error) {
     console.error("Error in signup controller:", error.message);
@@ -96,30 +84,10 @@ export const login = async (req, res) => {
   try {
     const { email, password } = req.body;
     const user = await User.findOne({ email });
-
     if (user && (await user.comparePassword(password))) {
-
-      if (!user.isVerified) {
-        if (!user.verificationCodeExpires || user.verificationCodeExpires < new Date()) {
-          const verificationCode = generateVerificationCode();
-          const verificationCodeExpires = new Date(Date.now() + 10 * 60 * 1000);
-          user.verificationCode = verificationCode;
-          user.verificationCodeExpires = verificationCodeExpires;
-          await user.save();
-          await sendVerificationEmail(email, verificationCode);
-        }
-        return res.status(403).json({
-          message: "Email not verified",
-          isVerified: false,
-          _id: user._id,
-          email: user.email,
-        });
-      }
-
       const { accessToken, refreshToken } = generateTokens(user._id);
       await storeRefreshToken(user._id, refreshToken);
       setCookies(res, accessToken, refreshToken);
-
       res.json({
         _id: user._id,
         name: user.name,

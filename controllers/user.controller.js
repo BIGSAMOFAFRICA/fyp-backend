@@ -6,7 +6,7 @@ import EscrowTransaction from "../models/escrowTransaction.model.js";
 
 export const getAllUsers = async (req, res) => {
 	try {
-		const users = await User.find({}, { password: 0, verificationCode: 0, resetPasswordOTP: 0 })
+		const users = await User.find({}, { password: 0, resetPasswordToken: 0 })
 			.sort({ createdAt: -1 });
 		
 		res.json({

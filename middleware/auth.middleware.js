@@ -82,10 +82,8 @@ export const protectRoute = async (req, res, next) => {
       return res.status(500).json({ message: "Server error when authenticating user" });
     }
 
-    if (!user.isVerified) {
-      return res.status(403).json({ message: "Email not verified" });
-    }
-
+    // Previously the system required email verification before allowing access.
+    // OTP-based signup verification was removed, so we no longer block users here.
     req.user = user;
     next();
   } catch (error) {
